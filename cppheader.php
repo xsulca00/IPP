@@ -13,6 +13,7 @@ class Error_ret
     // bad input file format
     const input_file_format = 4;
     // 10 - 99 task specfic error return value
+    const bad_indent_value = 10;
     // ...
     // 100 - 127 
 }
@@ -57,7 +58,6 @@ function printerr($string)
 
 function get_token($fin)
 {
-
     $keywords = array( 
         "class" => Keywords::kw_class,
         "public" => Keywords::kw_public,
@@ -95,13 +95,13 @@ function get_token($fin)
 
         if ($prevc == '=' && $c == '0')
         {
-            echo "Virtual!\n";
+            echo "= 0\n";
             return true;
         }
         $prevc = $c;
 
-
-        echo "$c\n";
+        if ($prevc != "=")
+            echo "$c\n";
         return true;
     }
 }
@@ -118,21 +118,38 @@ function get_args($arguments)
 
     array_shift($arguments);
 
-    $matches;
     $options = array();
 
     foreach ($arguments as $argument)
     {
+        $valid_arg = false;
         foreach ($patterns as $pattern => $option_name)
         {
+            $matches = array();
             if (preg_match($pattern, $argument, $matches))
             {
-                $options[$option_name][] =  $matches[1];
+                var_dump($matches);
+                if (1 < count($matches))
+                    $options[$option_name][] = $matches[1];
+                else
+                    $options[$option_name][] = true;
+                $valid_arg = true;
             }
         }
+        if (!$valid_arg)
+            $options[$argument] = array();
     }
 
     print_r($options);
+    // find invalid parameters
+    foreach ($options as $argument)
+    {
+        if (empty($argument))
+        {
+            printerr("Invalid parameter(s) passed!");
+            exit(Error_ret::invalid_params);
+        }
+    }
 
     return $options;
 }
@@ -148,7 +165,7 @@ function get_opt($name, $options)
             printerr("Parameter '$name' typed more than once!");
             exit(Error_ret::invalid_params); 
         }
-        return $options[$name];
+        return $options[$name][0];
     }
     return false;
 }
@@ -158,10 +175,10 @@ $options = get_args($argv);
 // priority - just help first...
 if (get_opt("--help", $options))
 {
-    $prompter = "Nápověda:\n    • --input=ﬁle\n\tVstupní textový soubor ﬁle, který obsahuje popis tříd jazyka C++ podle popsaných omezení.\n\tPředpokládejte kódování ASCII.\n\tChybí-li tento parametr, je uvažován standardní vstup.\n
+    $prompter = "Nápověda:\n    • --input=ﬁle\n\tVstupní textový soubor ﬁle, který obsahuje popis tříd jazyka C++ podle popsaných omezení.\n\tChybí-li tento parametr, je uvažován standardní vstup.\n
     • --output=ﬁle\n\tVýstupní soubor ﬁle ve formátu XML v kódování UTF-8.\n\tNení-li tento parametr zadán, bude výstup vypsán na standardní výstup.\n
-    • --pretty-xml=k\n\tVýstupní XML bude formátováno tak, že každé nové zanoření bude odsazeno o k mezer oproti předchozímu.\n\tNení-li k zadáno, uvažujte k = 4.\n\tPokud tento parametr není zadán, je formátování výstupního XML volné (doporučujeme mít na každém řádku maximálně jeden element).\n
-    • --details=class\n\tMísto stromu dědičností mezi třídami se na výstup vypisují údaje o členech třídy se jménem class.\n\tFormát je popsán výše.\n\tPokud argument class není zadán, vypisují se detaily o všech třídách v daném souboru, kde kořenem XML souboru je model.\n\tPokud class neexistuje, bude na výstup vypsána pouze XML hlavička.\n";
+    • --pretty-xml=k\n\tVýstupní XML bude formátováno tak, že každé nové zanoření bude odsazeno o k mezer oproti předchozímu.\n\tNení-li k zadáno, uvažujte k = 4.\n\tPokud tento parametr není zadán, je formátování výstupního XML volné.\n
+    • --details=class\n\tMísto stromu dědičností mezi třídami se na výstup vypisují údaje o členech třídy se jménem class.\n\tPokud argument class není zadán, vypisují se detaily o všech třídách v daném souboru, kde kořenem XML souboru je model.\n\tPokud class neexistuje, bude na výstup vypsána pouze XML hlavička.\n";
         // other parameters were passed?
     if (2 <= count($options))
     {
@@ -177,26 +194,39 @@ else
     $ofile = STDOUT;    // output
     $dtlclass = NULL;   // detailed class
 
-    if ($op_indent = get_opt("--pretty-xml", $options))
+    if ($indent = get_opt("--pretty-xml", $options))
     {
-        // string is integer
-        if ($op_indent != "none")
-            $k = (int)$op_indent;
+        // is string integer?
+        for($len = strlen($indent), $i = 0; $i != $len; $i++) 
+        {
+            // does not need to check '-', need non-negative
+            if (!ctype_digit($indent[$i]))
+            {
+                printerr("Invalid indent value '$indent'!");
+                exit(Error_ret::bad_indent_value);
+            }
+        }
+        $k = (int)$indent;
     }
-
+   
+    // empty string is implicitly converted to false
     if ($op_dtlclass = get_opt("--details", $options))
     {
-        if ($op_dtlclass != "none")
-            $dtlclass = $op_dtlclass;
+        $dtlclass = $op_dtlclass;
     }
 
     if ($fname = get_opt("--input", $options))
     {
+        if (is_dir($fname))
+        {
+            printerr("Input file '$fname' is a directory!");
+            exit(Error_ret::opening_input);
+        }
+
         $ifile = fopen($fname, "r"); 
 
         if (!$ifile)
             exit(Error_ret::opening_input);
-        echo "$fname\n";
     }
 
     if ($fname = get_opt("--output", $options))
@@ -205,7 +235,6 @@ else
 
         if (!$ofile)
             exit(Error_ret::opening_output);
-        echo "$fname\n";
     }
 
     echo "$k\n$ifile\n$ofile\n$dtlclass\n";
