@@ -68,41 +68,76 @@ function get_token($fin)
         "static" => Keywords::kw_static
     );
 
-    $c = 0;
-
-    while (ctype_space($c = fgetc($fin)))
-        ;
-
-    if (feof($fin))
-        return false;
-
-    if (ctype_alpha($c))
+    for (;;)
     {
-        $id = "";
-        $id = $c;
-        for (;ctype_alnum($c = fgetc($fin));)
-            $id = $id.$c;
+        $c = 0;
 
-        if (!ctype_alnum($c))
-            fseek($fin, -1, SEEK_CUR);
+        while (ctype_space($c = fgetc($fin)))
+            ;
 
-        echo "$id\n";
-        return true;
-    }
-    else
-    {
-        static $prevc = 0;
+        if (feof($fin))
+            return false;
 
-        if ($prevc == '=' && $c == '0')
+        static $state = "none";
+
+        switch ($c)
         {
-            echo "= 0\n";
-            return true;
-        }
-        $prevc = $c;
+            case "=":
+                $state = "pure virtual";
+                break;
+            case "0":
+                if ($state == "pure virtual")
+                {
+                    echo "=0";
+                    $state = "none";
+                    return true;
+                }
+                echo $c;
+                break;
+            case ":":
+                if ($state == "next colon")
+                {
+                    echo "::";
+                    $state = "none";
+                    return true;
+                }
 
-        if ($prevc != "=")
-            echo "$c\n";
-        return true;
+                $state = "next colon";
+                break;
+            default:
+                if ($state == "next colon")
+                {
+                    fseek($fin, -1, SEEK_CUR);
+                    $c = ":";
+                }
+                if ($state == "pure virtual")
+                {
+                    fseek($fin, -1, SEEK_CUR);
+                    $c = "=";
+                }
+
+                $state = "none";
+                
+                // identifier ?
+                if (ctype_alpha($c))
+                {
+                    $state = "identifier";
+                    $id = "";
+                    $id = $c;
+                    for (;ctype_alnum($c = fgetc($fin));)
+                        $id = $id.$c;
+
+                    if (!ctype_alnum($c))
+                        fseek($fin, -1, SEEK_CUR);
+
+                    echo "$id";
+                    return true;
+                }
+
+                // normal char
+                echo "$c";
+                break;
+        }
     }
 }
 
@@ -128,7 +163,7 @@ function get_args($arguments)
             $matches = array();
             if (preg_match($pattern, $argument, $matches))
             {
-                var_dump($matches);
+            //    var_dump($matches);
                 if (1 < count($matches))
                     $options[$option_name][] = $matches[1];
                 else
@@ -140,7 +175,7 @@ function get_args($arguments)
             $options[$argument] = array();
     }
 
-    print_r($options);
+    // print_r($options);
     // find invalid parameters
     foreach ($options as $argument)
     {
@@ -237,7 +272,7 @@ else
             exit(Error_ret::opening_output);
     }
 
-    echo "$k\n$ifile\n$ofile\n$dtlclass\n";
+    //echo "$k\n$ifile\n$ofile\n$dtlclass\n";
 
     // details=  -- not set
     // info about all classes

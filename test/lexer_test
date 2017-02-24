@@ -1,0 +1,27 @@
+#!/usr/bin/bash
+
+TEST=test*
+SRC=../cppheader.php
+
+for FILE in $TEST
+do
+   echo "[Processing $FILE]:"
+   php -f $SRC -- --input=$FILE > output1
+   cat $FILE | tr -d ' \n\t' > output2
+
+   echo "Comparing:"
+   cat output1
+   echo ""
+   cat output2
+   echo ""
+   diff output1 output2
+
+   if [ $? == 0 ]
+   then
+       echo "   Test successful!"
+   else
+       echo "   Test failed!"
+   fi
+done
+
+
