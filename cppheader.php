@@ -1,5 +1,11 @@
 <?php
 
+include "args.php";
+include "lex.php";
+include "parser.php";
+
+$writer = new XMLWriter();
+
 class Error_ret
 {
     // no error
@@ -18,175 +24,16 @@ class Error_ret
     // 100 - 127 
 }
 
-class Keywords
+function xml($ofile, $text)
 {
-    const kw_class = 0;
-    const kw_public = 1;
-    const kw_protected = 2;
-    const kw_private = 3;
-    const kw_using = 4;
-    const kw_virtual = 5;
-    const kw_static = 6;
-    const kw_pure_virtual = 7;
-
-    const kw_char = 8;
-    const kw_bool = 9;
-    const kw_char16_t = 10;
-    const kw_char32_t = 11;
-    const kw_wchar_t = 12;
-    const kw_signed_char = 13;
-    const kw_short_int = 14;
-    const kw_int = 15;
-    const kw_long_int = 16;
-    const kw_long_long_int = 17;
-    const kw_unsigned_char = 18;
-    const kw_unsigned_short_int = 19;
-    const kw_unsigned_int = 20;
-    const kw_unsigned_long_int = 21;
-    const kw_unsigned_long_long_int = 22;
-    const kw_float = 23;
-    const kw_double = 24;
-    const kw_long_double = 25;
-    const kw_void = 26;
+    file_put_contents($ofile, $text);
+    file_put_contents($ofile, "\n");
 }
 
 function printerr($string)
 {
     $string .= "\n";
     fwrite(STDERR, $string);
-}
-
-function get_token($fin)
-{
-    $keywords = array( 
-        "class" => Keywords::kw_class,
-        "public" => Keywords::kw_public,
-        "protected" => Keywords::kw_protected,
-        "private" => Keywords::kw_private,
-        "using" => Keywords::kw_using,
-        "virtual" => Keywords::kw_virtual,
-        "static" => Keywords::kw_static
-    );
-
-    for (;;)
-    {
-        $c = 0;
-
-        while (ctype_space($c = fgetc($fin)))
-            ;
-
-        if (feof($fin))
-            return false;
-
-        static $state = "none";
-
-        switch ($c)
-        {
-            case "=":
-                $state = "pure virtual";
-                break;
-            case "0":
-                if ($state == "pure virtual")
-                {
-                    echo "=0";
-                    $state = "none";
-                    return true;
-                }
-                echo $c;
-                break;
-            case ":":
-                if ($state == "next colon")
-                {
-                    echo "::";
-                    $state = "none";
-                    return true;
-                }
-
-                $state = "next colon";
-                break;
-            default:
-                if ($state == "next colon")
-                {
-                    fseek($fin, -1, SEEK_CUR);
-                    $c = ":";
-                }
-                if ($state == "pure virtual")
-                {
-                    fseek($fin, -1, SEEK_CUR);
-                    $c = "=";
-                }
-
-                $state = "none";
-                
-                // identifier ?
-                if (ctype_alpha($c))
-                {
-                    $state = "identifier";
-                    $id = "";
-                    $id = $c;
-                    for (;ctype_alnum($c = fgetc($fin));)
-                        $id = $id.$c;
-
-                    if (!ctype_alnum($c))
-                        fseek($fin, -1, SEEK_CUR);
-
-                    echo "$id";
-                    return true;
-                }
-
-                // normal char
-                echo "$c";
-                break;
-        }
-    }
-}
-
-function get_args($arguments)
-{
-    $patterns = array(
-        "/--help/" => "--help",
-        "/--input=(.*)/" => "--input",
-        "/--output=(.*)/" => "--output",
-        "/--pretty-xml=(.*)/" => "--pretty-xml",
-        "/--details=(.*)/" => "--details"
-    );
-
-    array_shift($arguments);
-
-    $options = array();
-
-    foreach ($arguments as $argument)
-    {
-        $valid_arg = false;
-        foreach ($patterns as $pattern => $option_name)
-        {
-            $matches = array();
-            if (preg_match($pattern, $argument, $matches))
-            {
-            //    var_dump($matches);
-                if (1 < count($matches))
-                    $options[$option_name][] = $matches[1];
-                else
-                    $options[$option_name][] = true;
-                $valid_arg = true;
-            }
-        }
-        if (!$valid_arg)
-            $options[$argument] = array();
-    }
-
-    // print_r($options);
-    // find invalid parameters
-    foreach ($options as $argument)
-    {
-        if (empty($argument))
-        {
-            printerr("Invalid parameter(s) passed!");
-            exit(Error_ret::invalid_params);
-        }
-    }
-
-    return $options;
 }
 
 function get_opt($name, $options)
@@ -280,13 +127,30 @@ else
     
     // pretty xml opt missing => whatever format
     // k is 4 in default
-    //
-    while (get_token($ifile))
-        ;
+    $token_stream = new Token($ifile);
+
+    global $writer;
+
+    $writer->openMemory();
+    $writer->setIndent(true);
+
+    $indent = "";
+    while ($k--)
+        $indent .= " ";
+    $writer->setIndentString($indent);
+    $writer->startDocument("1.0", "UTF-8");
+    $writer->startElement('model');
+
+    parse_class($token_stream, $ofile);
+
+    Class_obj::print_all();
+
+    $writer->endElement();
+    $writer->endDocument();
+    echo $writer->outputMemory();
 
     fclose($ifile);
     fclose($ofile);
-
 }
 
 exit(Error_ret::no_error);

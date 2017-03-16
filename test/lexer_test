@@ -6,10 +6,9 @@ SRC=../cppheader.php
 for FILE in $TEST
 do
    echo "[Processing $FILE]:"
-   php -f $SRC -- --input=$FILE > output1
+   php -f $SRC -- --input=$FILE | tr -d ' \n\t' > output1
    cat $FILE | tr -d ' \n\t' > output2
 
-   echo "Comparing:"
    cat output1
    echo ""
    cat output2
@@ -18,10 +17,11 @@ do
 
    if [ $? == 0 ]
    then
-       echo "   Test successful!"
+       echo "   $(tput setaf 2)Test successful! $(tput sgr0)"
    else
-       echo "   Test failed!"
+       echo "   $(tput setaf 1)Test failed!$(tput sgr0)"
    fi
+   echo ""
 done
 
 
