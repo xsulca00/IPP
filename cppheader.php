@@ -1,8 +1,8 @@
 <?php
 
-include "args.php";
-include "lex.php";
-include "parser.php";
+include_once "args.php";
+include_once "lex.php";
+include_once "parser.php";
 
 $writer = new XMLWriter();
 

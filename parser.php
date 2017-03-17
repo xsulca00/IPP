@@ -2,28 +2,68 @@
 //////////////////////////////////
 /// PARSER
 //
-class Function_obj
+class Member_func
 {
-    public $name;
-    public $pure;
-    public $defined;
-    public $virtual;
+    public $type; // destructor or constructor
 
-    function __construct($name, $pure, $virtual, $defined)
+    public $virtual;
+    public $ret_type;
+    public $name;
+    public $args;
+    public $pure;
+
+    public $defined;
+
+    function __construct($type, $virtual, $ret_type, $name, $args, $pure, $defined)
     {
-        $this->name = $name;
-        $this->pure = $pure;
+        $this->type = $type;
         $this->virtual = $virtual;
+        $this->ret_type = $ret_type;
+        $this->name = $name;
+        $this->args = $args;
+        $this->pure = $pure;
         $this->defined = $defined;
+    }
+}
+
+class Data_member
+{
+    public $type; // static ...
+    public $data_type;
+    public $name;
+
+    function __construct($type, $data_type, $name)
+    {
+        $this->type = $type;
+        $this->data_type = $data_type;
+        $this->name = $name;
+    }
+}
+
+function deeper($derived, &$functions)
+{
+    foreach($derived as $dclass)
+    {
+        foreach ($dclass->member_funcs() as $method)
+        {
+            $functions[] = $method;
+//            echo "FUNC: ".$method->name."\n";
+        }
+
+        if (!empty($dclass->derived()))
+        {
+            deeper($dclass->derived(), $functions);
+        }
     }
 }
 
 class Class_obj
 {
     private $name;
-    private $derived;
+    private $derivations;
     private $abstract;
-    private $functions;
+    private $member_funcs;
+    private $data_members;
 
     static public $inheritance = array(); 
     static public $classes = array(); 
@@ -32,16 +72,17 @@ class Class_obj
     {
         $this->name = $name;
         $this->abstract = false;
-        $this->functions = array();
 
         self::$inheritance[$name] = array();
         self::$inheritance[$name][] = $this;
 
-        $this->derived = array();
+        $this->derivations = array();
+        $this->member_funcs = array();
+        $this->data_members = array();
         // echo "\nIN: ".self::$inheritance[$name]->name()."\n";
     }
 
-    public function add_func($name, $pure, $virtual, $defined)
+    public function add_mem_func($type, $virtual, $ret_type, $name, $args, $pure, $defined)
     {
         if (isset($this->functions[$name]) && $this->functions[$name]->defined)
         {
@@ -49,12 +90,27 @@ class Class_obj
             exit(Error_ret::input_file_format);
         }
             
-        $this->functions[$name] = new Function_obj($name, $pure, $virtual, $defined);
+        $this->member_funcs[$name] = new Member_func($type, $virtual, $ret_type, $name, $args, $pure, $defined);
+    }
+
+    public function add_data_mem($type, $data_type, $name)
+    {
+        if (isset($this->data_members[$name]))
+        {
+            printerr("Redefinition of '$name' data member in '$this->name' class!");
+            exit(Error_ret::input_file_format);
+        }
+        $this->data_members[$name] = new Data_member($type, $data_type, $name);
     }
 
     public function functions()
     {
-        return $this->functions;
+        return $this->member_funcs;
+    }
+
+    public function member_funcs()
+    {
+        return $this->member_funcs;
     }
 
     public function func_defined($name)
@@ -67,7 +123,7 @@ class Class_obj
         $this->abstract = true;
     }
 
-    public function abstract()
+    public function is_abstract()
     {
         return $this->abstract;
     }
@@ -94,7 +150,7 @@ class Class_obj
 
             $writer->startElement("class");
             $writer->writeAttribute("name", $base_name);
-            $writer->writeAttribute("kind", ($base->abstract()) ? "abstract" : "concrete");
+            $writer->writeAttribute("kind", ($base->is_abstract()) ? "abstract" : "concrete");
 
             while ($cname = array_shift($array))
             {
@@ -115,6 +171,29 @@ class Class_obj
         }
     }
 
+    public function derived()
+    {
+        return $this->derivations;
+    }
+
+
+    public function get_pure_func()
+    {
+        $functions = array();
+
+        if (!empty($this->derivations))
+            deeper($this->derivations, $functions);
+
+        return $functions;
+    }
+
+    public function check_abstract()
+    {
+        $pure_methods = $this->get_pure_func();
+
+        print_r($pure_methods);
+    }
+
     public function define()
     {
         $class_name = $this->name;
@@ -131,6 +210,11 @@ class Class_obj
         return $this->name;
     }
 
+    public function derivations()
+    {
+        return $this->derivations();
+    }
+
     public function derived_from($base_name)
     {
         if (!self::is_defined($base_name))
@@ -141,8 +225,10 @@ class Class_obj
 
         $base = self::$classes[$base_name];
 
-        $this->abstract = $base->abstract();
-        $this->functions[] = $base->functions();
+        $this->abstract = $base->is_abstract();
+        $this->derivations[$base_name] = $base;
+
+        //print_r($this->derivations);
 
         self::$inheritance[$base_name][] = $this;
     }
@@ -202,8 +288,11 @@ function parse_class($token, $ofile)
 
                     // class is fully defined, record that
                     $class->define();
+                    $class->check_abstract();
+                    //$class->check_abstract();
                     //eat semicolon
                     $token->get();
+                    ////print_r($class->functions());
                 }
                 break;
             default:
@@ -369,12 +458,14 @@ function parse_member_definition($token, $ofile, $class)
 
     echo "  ";
     $virtual = false;
+    $static = false;
 
     if ($token->type() == Keywords::kw_static ||
         $token->type() == Keywords::kw_virtual)
     {
         if ($token->type() == Keywords::kw_static)
         {
+            $static = true;
             echo "static ";
         }
         else
@@ -408,16 +499,17 @@ function parse_member_definition($token, $ofile, $class)
     }
 
     //TODO: semantic redefinition variable, void variable
-    parse_member_definition_more($token, $ofile, $class, $identifier, $virtual);
+    parse_member_definition_more($token, $ofile, $class, $identifier, $virtual, $data_type, $mem_modifier , $static);
 }
 
-function parse_member_definition_more($token, $ofile, $class, $identifier, $virtual)
+function parse_member_definition_more($token, $ofile, $class, $identifier, $virtual, $data_type, $mem_modifier , $static)
 {
     switch ($token->type())
     {
         // data member
         case Keywords::kw_semicolon:
             echo ";\n";
+            $class->add_data_mem($static, $data_type." $mem_modifier", $identifier);
             break;
         // member function
         case Keywords::kw_left_parent:
@@ -427,6 +519,8 @@ function parse_member_definition_more($token, $ofile, $class, $identifier, $virt
             {
                 parse_argument_list($token, $ofile, $class);
             }
+
+            $args = "void";
             echo ")";
             // eat closing parenthes
             $token->get();
@@ -470,7 +564,13 @@ function parse_member_definition_more($token, $ofile, $class, $identifier, $virt
                     echo "ERROR!";
                     break;
             }
-            $class->add_func($fun_name, $pure, $virtual, $defined);
+            $type = "static";
+            if ($mem_modifier == "~")
+                $type = "destructor";
+            elseif ($class->name() == $fun_name)
+                $type = "constructor";
+
+            $class->add_mem_func($type, $virtual, $data_type." $mem_modifier", $fun_name, $args, $pure, $virtual, $defined);
             break;
     }
 }
