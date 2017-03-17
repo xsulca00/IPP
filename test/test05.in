@@ -2,7 +2,7 @@ class A {virtual int f(void) =0;};
 class B : A {
 public:
     int var;
-    int f(void);
+    int f(void) {};
 };
 class C {};
 class D : protected B, C {};

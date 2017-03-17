@@ -24,12 +24,6 @@ class Error_ret
     // 100 - 127 
 }
 
-function xml($ofile, $text)
-{
-    file_put_contents($ofile, $text);
-    file_put_contents($ofile, "\n");
-}
-
 function printerr($string)
 {
     $string .= "\n";
@@ -141,13 +135,14 @@ else
     $writer->startDocument("1.0", "UTF-8");
     $writer->startElement('model');
 
-    parse_class($token_stream, $ofile);
+    parse_class($token_stream, $ofile, $dtlclass);
 
-    Class_obj::print_all();
+    if (!$dtlclass)
+        Class_obj::print_all();
 
     $writer->endElement();
     $writer->endDocument();
-    echo $writer->outputMemory();
+    fwrite($ofile, $writer->outputMemory());
 
     fclose($ifile);
     fclose($ofile);

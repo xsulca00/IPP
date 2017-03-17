@@ -6,13 +6,13 @@ class Member_func
 {
     public $type; // destructor or constructor
 
-    public $virtual;
-    public $ret_type;
-    public $name;
-    public $args;
-    public $pure;
+    public $virtual = false;
+    public $ret_type = "";
+    public $name = "";
+    public $args = "void";
+    public $pure = false;
 
-    public $defined;
+    public $defined = false;
 
     function __construct($type, $virtual, $ret_type, $name, $args, $pure, $defined)
     {
@@ -47,7 +47,7 @@ function deeper($derived, &$functions)
         foreach ($dclass->member_funcs() as $method)
         {
             $functions[] = $method;
-//            echo "FUNC: ".$method->name."\n";
+//            //echo "FUNC: ".$method->name."\n";
         }
 
         if (!empty($dclass->derived()))
@@ -79,7 +79,7 @@ class Class_obj
         $this->derivations = array();
         $this->member_funcs = array();
         $this->data_members = array();
-        // echo "\nIN: ".self::$inheritance[$name]->name()."\n";
+        // //echo "\nIN: ".self::$inheritance[$name]->name()."\n";
     }
 
     public function add_mem_func($type, $virtual, $ret_type, $name, $args, $pure, $defined)
@@ -176,7 +176,6 @@ class Class_obj
         return $this->derivations;
     }
 
-
     public function get_pure_func()
     {
         $functions = array();
@@ -191,7 +190,18 @@ class Class_obj
     {
         $pure_methods = $this->get_pure_func();
 
-        print_r($pure_methods);
+        foreach ($pure_methods as $pure)
+        {
+            if (!isset($this->member_funcs[$pure->name]))
+                continue;
+
+            $method = $this->member_funcs[$pure->name];
+
+            if ($pure->name == $method->name && $method->defined)
+            {
+                $this->abstract = false;
+            }
+        }
     }
 
     public function define()
@@ -240,7 +250,7 @@ class Class_obj
 // parsing according to respective grammar
 //
 
-function parse_class($token, $ofile)
+function parse_class($token, $ofile, $dtlclass)
 {
     for (;;)
     {
@@ -251,13 +261,14 @@ function parse_class($token, $ofile)
         switch ($token->type())
         { 
             case Keywords::kw_class:
-                echo $token->name();
+                //echo $token->name();
 
                 // class name
                 $token->get();
                 $class_name = $token->name();
 
                 $class = new Class_obj($class_name);
+
                 /*
                 $writer->startElement("class");
                 $writer->writeAttribute('name', $class_name);
@@ -265,7 +276,7 @@ function parse_class($token, $ofile)
                 $writer->endElement();
                  */
 
-                echo " $class_name";
+                //echo " $class_name";
 
                 // public by default when inheritance type is left out
                 $token->get();
@@ -274,7 +285,7 @@ function parse_class($token, $ofile)
                 if ($token->type() == Keywords::kw_colon)
                 {
                 //    $writer->startElement('inheritance');
-                    echo " :";
+                    //echo " :";
                     parse_access_specifier($token, $ofile, $class);
                  //   $writer->endElement();
                 }
@@ -282,9 +293,9 @@ function parse_class($token, $ofile)
                 if ($token->type() == Keywords::kw_left_brace)
                 {
                     // body of the class
-                    echo "\n{\n";
+                    //echo "\n{\n";
                     parse_expression_type_list($token, $ofile, $class);
-                    echo "};\n\n";
+                    //echo "};\n\n";
 
                     // class is fully defined, record that
                     $class->define();
@@ -319,7 +330,7 @@ function parse_access_specifier($token, $ofiles, $class)
         {
             // ok, access specifier explicitly set
             $access = $token->name();
-            echo " $access";
+            //echo " $access";
             // eat access specifier
             $token->get();
         }
@@ -333,7 +344,7 @@ function parse_access_specifier($token, $ofiles, $class)
         $writer->writeAttribute('privacy', $access);
  */
 
-        echo " $base_name";
+        //echo " $base_name";
         /*
         global $class_names;
         if (!$class_names->is_defined($cname))
@@ -352,7 +363,7 @@ function parse_access_specifier($token, $ofiles, $class)
 
         if ($token->type() == Keywords::kw_comma)
         {
-            echo ",";
+            //echo ",";
             //$writer->startElement('from');
             $access = "private";
             $base_name = "";
@@ -362,7 +373,7 @@ function parse_access_specifier($token, $ofiles, $class)
             if ($token->type() == Keywords::kw_access_spec)
             {
                 $access = $token->name();
-                echo " $access";
+                //echo " $access";
                 $token->get();
             }
 
@@ -371,7 +382,7 @@ function parse_access_specifier($token, $ofiles, $class)
 
             $class->derived_from($base_name);
 
-            echo " $base_name";
+            //echo " $base_name";
 /*
             $writer->writeAttribute('name', $cname);
             $writer->writeAttribute('privacy', $access);
@@ -415,7 +426,7 @@ function parse_expression_type_list($token, $ofile, $class)
           //          $writer->startElement($access);
                 }
                 $elem_end = true;
-                echo "  $access:\n";
+                //echo "  $access:\n";
                 // eat colon
                 $token->get();
                 break;
@@ -434,7 +445,7 @@ function parse_expression_type_list($token, $ofile, $class)
                 $token->get();
                 // second ID
                 $second_id = $token->name();
-                echo "using $first_id::$second_id;";
+                //echo "using $first_id::$second_id;";
                 // eat second ID
                 $token->get();
                 break;
@@ -456,7 +467,7 @@ function parse_member_definition($token, $ofile, $class)
     $mem_modifier = "";
     $identifier = "";
 
-    echo "  ";
+    //echo "  ";
     $virtual = false;
     $static = false;
 
@@ -466,12 +477,12 @@ function parse_member_definition($token, $ofile, $class)
         if ($token->type() == Keywords::kw_static)
         {
             $static = true;
-            echo "static ";
+            //echo "static ";
         }
         else
         {
             $virtual = true;
-            echo "virtual ";
+            //echo "virtual ";
         }
 
         $mem_specifier = $token->name();
@@ -479,7 +490,7 @@ function parse_member_definition($token, $ofile, $class)
     }
 
     $data_type = $token->name();
-    echo "$data_type";
+    //echo "$data_type";
     $token->get();
 
     if ($token->type() == Keywords::kw_asterix ||
@@ -487,14 +498,14 @@ function parse_member_definition($token, $ofile, $class)
         $token->type() == Keywords::kw_tilde)
     {
         $mem_modifier = $token->name();
-        echo "$mem_modifier ";
+        //echo "$mem_modifier ";
         $token->get();
     }
 
     if ($data_type != "void")
     {
         $identifier = $token->name();
-        echo "$identifier";
+        //echo "$identifier";
         $token->get();
     }
 
@@ -508,12 +519,12 @@ function parse_member_definition_more($token, $ofile, $class, $identifier, $virt
     {
         // data member
         case Keywords::kw_semicolon:
-            echo ";\n";
+            //echo ";\n";
             $class->add_data_mem($static, $data_type." $mem_modifier", $identifier);
             break;
         // member function
         case Keywords::kw_left_parent:
-            echo "(";
+            //echo "(";
             // function has arguments? process them!
             if ($token->type() != Keywords::kw_right_parent)
             {
@@ -521,7 +532,7 @@ function parse_member_definition_more($token, $ofile, $class, $identifier, $virt
             }
 
             $args = "void";
-            echo ")";
+            //echo ")";
             // eat closing parenthes
             $token->get();
 
@@ -531,29 +542,29 @@ function parse_member_definition_more($token, $ofile, $class, $identifier, $virt
             switch ($token->type())
             {
                 case Keywords::kw_semicolon:
-                    echo $token->name();
+                    //echo $token->name();
                     break;
                 case Keywords::kw_pure_virtual:
-                    echo " = 0"; 
+                    //echo " = 0"; 
                     $class->set_abstract();
                     $pure = true;
                     // eat =0 
                     $token->get();
-                    echo $token->name();
+                    //echo $token->name();
                     break;
                 case Keywords::kw_left_brace:
                     // eat {
                     $token->get();
                     // eat } 
                     $token->get();
-                    echo "{ }\n";
+                    //echo "{ }\n";
 
                     // function defined
                     $defined = true;
 
                     if ($token->type() == Keywords::kw_semicolon)
                     {
-                        echo $token->name();
+                        //echo $token->name();
                     }
                     else
                     {
@@ -561,7 +572,7 @@ function parse_member_definition_more($token, $ofile, $class, $identifier, $virt
                     }
                     break;
                 default:
-                    echo "ERROR!";
+                    //echo "ERROR!";
                     break;
             }
             $type = "static";
@@ -569,8 +580,10 @@ function parse_member_definition_more($token, $ofile, $class, $identifier, $virt
                 $type = "destructor";
             elseif ($class->name() == $fun_name)
                 $type = "constructor";
+            else
+                $type = "";
 
-            $class->add_mem_func($type, $virtual, $data_type." $mem_modifier", $fun_name, $args, $pure, $virtual, $defined);
+            $class->add_mem_func($type, $virtual, $data_type." $mem_modifier", $fun_name, $args, $pure, $defined);
             break;
     }
 }
@@ -591,7 +604,7 @@ function parse_argument_list($token, $ofile, $class)
 
         if ($token->type() == Keywords::kw_comma)
         {
-            echo ", ";
+            //echo ", ";
             parse_member_definition($token, $ofile, $class);
         }
         else
