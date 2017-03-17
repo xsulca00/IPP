@@ -1,11 +1,29 @@
 <?php
 //////////////////////////////////
 /// PARSER
+//
+class Function_obj
+{
+    public $name;
+    public $pure;
+    public $defined;
+    public $virtual;
+
+    function __construct($name, $pure, $virtual, $defined)
+    {
+        $this->name = $name;
+        $this->pure = $pure;
+        $this->virtual = $virtual;
+        $this->defined = $defined;
+    }
+}
 
 class Class_obj
 {
     private $name;
     private $derived;
+    private $abstract;
+    private $functions;
 
     static public $inheritance = array(); 
     static public $classes = array(); 
@@ -13,11 +31,45 @@ class Class_obj
     function __construct($name)
     {
         $this->name = $name;
+        $this->abstract = false;
+        $this->functions = array();
+
         self::$inheritance[$name] = array();
         self::$inheritance[$name][] = $this;
 
         $this->derived = array();
         // echo "\nIN: ".self::$inheritance[$name]->name()."\n";
+    }
+
+    public function add_func($name, $pure, $virtual, $defined)
+    {
+        if (isset($this->functions[$name]) && $this->functions[$name]->defined)
+        {
+            printerr("Redefinition of '$name' func in '$this->name' class!");
+            exit(Error_ret::input_file_format);
+        }
+            
+        $this->functions[$name] = new Function_obj($name, $pure, $virtual, $defined);
+    }
+
+    public function functions()
+    {
+        return $this->functions;
+    }
+
+    public function func_defined($name)
+    {
+        return $this->functions[$name]->defined;
+    }
+
+    public function set_abstract()
+    {
+        $this->abstract = true;
+    }
+
+    public function abstract()
+    {
+        return $this->abstract;
     }
 
     public static function is_defined($class_name)
@@ -36,14 +88,13 @@ class Class_obj
 
         function traverse($array, &$visited)
         {
-        global $writer;
+            global $writer;
             $base = array_shift($array); 
             $base_name = $base->name();
-            echo "Base: $base_name\n";
 
             $writer->startElement("class");
             $writer->writeAttribute("name", $base_name);
-            $writer->writeAttribute("kind", "concrete");
+            $writer->writeAttribute("kind", ($base->abstract()) ? "abstract" : "concrete");
 
             while ($cname = array_shift($array))
             {
@@ -54,10 +105,8 @@ class Class_obj
                     traverse(Class_obj::$inheritance[$name], $visited);
             } 
             $writer->endElement();
-            echo "\n";
         }
 
-        print_r(self::$inheritance);
         foreach (self::$inheritance as $derived_array)
         {
             $base = $derived_array[0];
@@ -89,6 +138,11 @@ class Class_obj
             printerr("Undefined class '$class_name'!");
             exit(Error_ret::input_file_format);
         }
+
+        $base = self::$classes[$base_name];
+
+        $this->abstract = $base->abstract();
+        $this->functions[] = $base->functions();
 
         self::$inheritance[$base_name][] = $this;
     }
@@ -143,7 +197,7 @@ function parse_class($token, $ofile)
                 {
                     // body of the class
                     echo "\n{\n";
-                    parse_expression_type_list($token, $ofile);
+                    parse_expression_type_list($token, $ofile, $class);
                     echo "};\n\n";
 
                     // class is fully defined, record that
@@ -249,7 +303,7 @@ function parse_access_specifier($token, $ofiles, $class)
     }
 }
 
-function parse_expression_type_list($token, $ofile)
+function parse_expression_type_list($token, $ofile, $class)
 {
     static $elem_end = false;
     for (;;)
@@ -279,7 +333,7 @@ function parse_expression_type_list($token, $ofile)
             case Keywords::kw_static:
             case Keywords::kw_data_type:
             case Keywords::kw_virtual:
-                parse_member_definition($token, $ofile);
+                parse_member_definition($token, $ofile, $class);
                 break;
             case Keywords::kw_using:
                 $token->get();
@@ -306,13 +360,16 @@ function parse_expression_type_list($token, $ofile)
     }
 }
 
-function parse_member_definition($token, $ofile)
+function parse_member_definition($token, $ofile, $class)
 {
     $mem_specifier = "";
     $data_speicifier = "";
     $mem_modifier = "";
+    $identifier = "";
 
     echo "  ";
+    $virtual = false;
+
     if ($token->type() == Keywords::kw_static ||
         $token->type() == Keywords::kw_virtual)
     {
@@ -322,6 +379,7 @@ function parse_member_definition($token, $ofile)
         }
         else
         {
+            $virtual = true;
             echo "virtual ";
         }
 
@@ -350,10 +408,10 @@ function parse_member_definition($token, $ofile)
     }
 
     //TODO: semantic redefinition variable, void variable
-    parse_member_definition_more($token, $ofile);
+    parse_member_definition_more($token, $ofile, $class, $identifier, $virtual);
 }
 
-function parse_member_definition_more($token, $ofile)
+function parse_member_definition_more($token, $ofile, $class, $identifier, $virtual)
 {
     switch ($token->type())
     {
@@ -367,11 +425,15 @@ function parse_member_definition_more($token, $ofile)
             // function has arguments? process them!
             if ($token->type() != Keywords::kw_right_parent)
             {
-                parse_argument_list($token, $ofile);
+                parse_argument_list($token, $ofile, $class);
             }
             echo ")";
             // eat closing parenthes
             $token->get();
+
+            $fun_name = $identifier;
+            $pure = false;
+            $defined = false;
             switch ($token->type())
             {
                 case Keywords::kw_semicolon:
@@ -379,6 +441,8 @@ function parse_member_definition_more($token, $ofile)
                     break;
                 case Keywords::kw_pure_virtual:
                     echo " = 0"; 
+                    $class->set_abstract();
+                    $pure = true;
                     // eat =0 
                     $token->get();
                     echo $token->name();
@@ -389,6 +453,10 @@ function parse_member_definition_more($token, $ofile)
                     // eat } 
                     $token->get();
                     echo "{ }\n";
+
+                    // function defined
+                    $defined = true;
+
                     if ($token->type() == Keywords::kw_semicolon)
                     {
                         echo $token->name();
@@ -402,16 +470,17 @@ function parse_member_definition_more($token, $ofile)
                     echo "ERROR!";
                     break;
             }
+            $class->add_func($fun_name, $pure, $virtual, $defined);
             break;
     }
 }
 
-function parse_argument_list($token, $ofile)
+function parse_argument_list($token, $ofile, $class)
 {
     $token->get();
 
     // function arguments
-    parse_member_definition($token, $ofile);
+    parse_member_definition($token, $ofile, $class);
 
     if ($token->type() == Keywords::kw_right_parent)
         return;
@@ -423,7 +492,7 @@ function parse_argument_list($token, $ofile)
         if ($token->type() == Keywords::kw_comma)
         {
             echo ", ";
-            parse_member_definition($token, $ofile);
+            parse_member_definition($token, $ofile, $class);
         }
         else
         {
