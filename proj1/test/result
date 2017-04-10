@@ -1,0 +1,60 @@
+[Processing test01.in]:
+classA{};classB:A{};classC{};classD:B,C{};
+classA{};classB:A{};classC{};classD:B,C{};
+   [32mTest successful! (B[m
+
+[Processing test02.in]:
+classA{virtualintf(void)=0;};classB:A{};classC{};classD:B,C{};
+classA{virtualintf(void)=0;};classB:A{};classC{};classD:B,C{};
+   [32mTest successful! (B[m
+
+[Processing test03.in]:
+classA{virtualintf(void)=0;};classB:A{public:intvar;};classC{};classD:protectedB,C{};
+classA{virtualintf(void)=0;};classB:A{public:intvar;};classC{};classD:protectedB,C{};
+   [32mTest successful! (B[m
+
+[Processing test04.in]:
+classA{virtualintf(void)=0;};classB:A{};classC{};classD:B,C{};
+classA{virtualintf(void)=0;};classB:A{};classC{};classD:B,C{};
+   [32mTest successful! (B[m
+
+[Processing test05.in]:
+classA{virtualintf(void)=0;};classB:A{public:intvar;intf(void);};classC{};classD:protectedB,C{};
+classA{virtualintf(void)=0;};classB:A{public:intvar;intf(void);};classC{};classD:protectedB,C{};
+   [32mTest successful! (B[m
+
+[Processing test06.in]:
+classA{public:inta;};classB:publicA{};classC:A{};classD:publicB,C{public:};
+classA{public:inta;};classB:publicA{};classC:A{};classD:publicB,C{public:};
+   [32mTest successful! (B[m
+
+[Processing test07.in]:
+classA{private:virtualintf(void)=0;};classB:A{public:intvar;};classC:A{};classD:publicB,C{public:virtualintf(void){};};
+classA{private:virtualintf(void)=0;};classB:A{public:intvar;};classC:A{};classD:publicB,C{public:virtualintf(void){};};
+   [32mTest successful! (B[m
+
+[Processing test08.in]:
+classA{public:intvar;};classB{public:floatvar;};classC:publicA,publicB{usingB::var;};
+classA{public:intvar;};classB{public:floatvar;};classC:publicA,publicB{usingB::var;};
+   [32mTest successful! (B[m
+
+[Processing test09.in]:
+classA{virtualintf(void)=0;};classB:A{public:intvar;virtualintf(void){};};classC:A{};classD:publicB,C{public:virtualintf(void){};};classE:D{intf(void){};};
+classA{virtualintf(void)=0;};classB:A{public:intvar;virtualintf(void){};};classC:A{};classD:publicB,C{public:virtualintf(void){};};classE:D{intf(void){};};
+   [32mTest successful! (B[m
+
+[Processing test10.in]:
+classA{public:virtualintf(void)=0;};classB:protectedA{public:staticintvar;};classC{};classD:B,publicC{protected:usingB::var;};
+classA{public:virtualintf(void)=0;};classB:protectedA{public:staticintvar;};classC{};classD:B,publicC{protected:usingB::var;};
+   [32mTest successful! (B[m
+
+[Processing test11.in]:
+classA{boola;public:floataa;};classB:publicA{int*b;};
+classA{boola;public:floataa;};classB:publicA{int*b;};
+   [32mTest successful! (B[m
+
+[Processing test12.in]:
+classA{public:intvar;};classB{floatvar;};classC:A,B{};
+classA{public:intvar;};classB{floatvar;};classC:A,B{};
+   [32mTest successful! (B[m
+

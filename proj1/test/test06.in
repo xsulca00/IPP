@@ -1,0 +1,5 @@
+class A { public:int a; };
+class B : public A {
+};
+class C : A { };
+class D : public B, C {	public: };
