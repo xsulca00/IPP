@@ -4,6 +4,8 @@
 import _csv as csv
 import argparse
 import sys
+import xml.etree.ElementTree as ET
+from xml.dom import minidom
 
 # help message
 help_msg= "Skript pro konverzi formátu CSV (viz RFC 4180) do XML. Každému řádku CSV odpovídá jeden dodeﬁnovaný párový element (viz parametr -l) a ten bude obsahovat elementy pro jednotlivé sloupce (viz parametr -h). Tyto elementy pak již budou obsahovat textovou hodnotu dané buňky z CSV zdroje." 
@@ -49,8 +51,7 @@ def parse_args():
                         "CSV souboru slouží jako hlavička")
 
     parser.add_argument("-c", 
-                        nargs="?",
-                        const=True,
+                        default="col",
                         metavar="column-element", 
                         help="určuje preﬁx jména elementu column-elementX, "
                         "který bude obalovat nepojmenované buňky (resp. sloupce)")
@@ -89,6 +90,7 @@ def parse_args():
     try:
         args = parser.parse_args()
     except:
+        print_err("Chyba behem parsovani!")
         sys.exit(1)
 
     if args.help:
@@ -102,6 +104,13 @@ def parse_args():
         print_err("Vadna kombinace parametru!")
         sys.exit(1)
 
+    if args.i and args.l == None:
+        print_err("Vadna kombinace parametru! (-i nebylo zadano s -l)")
+        sys.exit(1)
+
+    if args.start and (not args.l or not args.i):
+        print_err("Vadna kombinace parametru! (--start nebyl zadan s -l a -i)")
+        sys.exit(1)
 
     if args.input == None:
         args.input = "stdin" 
@@ -114,9 +123,9 @@ def parse_args():
     if args.l == None:
         args.l = "row"
 
-    if args.i and args.l == None:
-        print_err("Vadna kombinace parametru!")
-        sys.exit(1)
+    if args.r:
+        string = "<root>"+args.r+"</root>"
+        ET.fromstring(string)
 
     print(args)
     return args;
@@ -140,9 +149,10 @@ def parse_csv(filename, dlmtr):
     except csv.Error as e:
         sys.exit('file {}, line {}: {}'.format(filename, reader.line_num, e))
 
-def generate_xml(filename):
+def generate_xml(opts):
     # try open output file
     xmlfile = None
+    filename = opts.output
     if filename == "stdout":
         xmlfile = sys.stdout
     else:
@@ -151,11 +161,74 @@ def generate_xml(filename):
         except:
             print_err("Cannot open output file'",filename,"'!")
             sys.exit(3)
+    # generate XML header if '-n' is not set
+    if not opts.n:
+        xmlfile.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+    # write root element if '-r' is set
+    tabs = ""
+    if opts.r:
+        xmlfile.write("<"+opts.r+">\n")
+        tabs = "\t"
+    # process first line
+    header = None 
+    if opts.h:
+        header = next(csv)
+
+    # ident count
+    X = 1
+    col_gen = False
+    if opts.h:
+        cur_header = iter(header)
+    else:
+        X = 1
+        col_gen = True
+
+    start = opts.start
+    for row in csv:
+        if opts.i:
+            xmlfile.write(tabs+"<"+opts.l+" index="+'"'+str(start)+'"'+">\n")
+        else:
+            xmlfile.write(tabs+"<"+opts.l+">\n")
+        tabs += "\t"
+        if col_gen:
+            X = 1
+        for cell in row:
+            cur = None
+            if opts.h:
+                cur = next(cur_header)
+                xmlfile.write(tabs+"<"+cur+">\n")
+                tabs += "\t"
+            elif col_gen:
+                xmlfile.write(tabs+"<"+opts.c+str(X)+">\n")
+                tabs += "\t"
+            # print column value
+            xmlfile.write(tabs+cell+"\n")
+            if opts.h:
+                tabs = tabs[:-1]
+                xmlfile.write(tabs+"</"+cur+">\n")
+            elif col_gen:
+                tabs = tabs[:-1]
+                xmlfile.write(tabs+"</"+opts.c+str(X)+">\n")
+                X += 1
+            if opts.h:
+                cur_header = iter(header)
+        tabs = tabs[:-1]
+        xmlfile.write(tabs+"</"+opts.l+">\n")
+        start += 1
+
+    # root element end tag
+    if opts.r:
+        xmlfile.write("</"+opts.r+">\n")
+#
+#    xml_string = ET.tostring(root, encoding="utf-8")
+#    reparsed = minidom.parseString(xml_string)
+#    xmlfile.write(reparsed.toprettyxml(indent="\t"))
+
+
 
 if __name__ == '__main__':
     opts = parse_args()
     # opts.s -- cell separator for csv
     csv = parse_csv(opts.input, opts.s)
-    generate_xml(opts.output)
-    for row in csv:
-        print(row)
+    generate_xml(opts)
+    sys.exit(0)
