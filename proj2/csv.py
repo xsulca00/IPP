@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import _csv as csv
-import argparse
 import sys
+import copy
+import argparse
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
@@ -13,6 +14,17 @@ help_msg= "Skript pro konverzi formátu CSV (viz RFC 4180) do XML. Každému ř�
 
 def print_err(*args):
     sys.stderr.write(' '.join(map(str,args)) + '\n')
+
+def copy_rows(csv):
+    rows = []
+    for row in csv:
+        cells = []
+        for cell in row:
+           cells.append(cell) 
+        rows.append(cells)
+
+    return rows
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description=help_msg, allow_abbrev=False, add_help=False)
@@ -68,7 +80,6 @@ def parse_args():
     parser.add_argument("--start", 
                         metavar="n", 
                         type=int,
-                        default=1,
                         help=" inicializace inkrementálního čitače "
                         "pro parametr -i na zadané kladné celé číslo n včetně nuly ")
 
@@ -100,17 +111,26 @@ def parse_args():
         parser.print_help()
         sys.exit(0)
 
-    if args.start < 0:
-        print_err("Vadna kombinace parametru!")
-        sys.exit(1)
-
     if args.i and args.l == None:
         print_err("Vadna kombinace parametru! (-i nebylo zadano s -l)")
         sys.exit(1)
 
-    if args.start and (not args.l or not args.i):
+    if args.start != None and (not args.l or not args.i):
         print_err("Vadna kombinace parametru! (--start nebyl zadan s -l a -i)")
         sys.exit(1)
+
+    if args.start != None and args.start < 0:
+        print_err("--start = n, n < 0!")
+        sys.exit(1)
+
+    if args.missing_field and not args.error_recovery:
+        print_err("Vadna kombinace parametru! (--missing-field nebyl zadan s -e, --error_recovery)")
+        sys.exit(1)
+
+    if args.all_columns and not args.error_recovery:
+        print_err("Vadna kombinace parametru! (--all-columns nebyl zadan s -e, --error_recovery)")
+        sys.exit(1)
+
 
     if args.input == None:
         args.input = "stdin" 
@@ -122,10 +142,6 @@ def parse_args():
         args.all_columns = "col"
     if args.l == None:
         args.l = "row"
-
-    if args.r:
-        string = "<root>"+args.r+"</root>"
-        ET.fromstring(string)
 
     print(args)
     return args;
@@ -149,86 +165,131 @@ def parse_csv(filename, dlmtr):
     except csv.Error as e:
         sys.exit('file {}, line {}: {}'.format(filename, reader.line_num, e))
 
-def generate_xml(opts):
-    # try open output file
+def open_output(name):
     xmlfile = None
-    filename = opts.output
-    if filename == "stdout":
+    if name == "stdout":
         xmlfile = sys.stdout
     else:
         try:
-            xmlfile = open(filename, newline='', encoding='utf-8')
+            xmlfile = open(name, newline='', encoding='utf-8')
         except:
-            print_err("Cannot open output file'",filename,"'!")
+            print_err("Cannot open output file'",name,"'!")
             sys.exit(3)
+    return xmlfile
+
+def generate_xml(opts, csv):
+    # result xml string
+    xmlstr = ""
+    # copy of rows (need mutable object) 
+    rows = copy_rows(csv)
+
     # generate XML header if '-n' is not set
     if not opts.n:
-        xmlfile.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+        xmlstr += ('<?xml version="1.0" encoding="UTF-8"?>\n')
+
     # write root element if '-r' is set
     tabs = ""
     if opts.r:
-        xmlfile.write("<"+opts.r+">\n")
+        xmlstr += "<"+opts.r+">\n"
         tabs = "\t"
-    # process first line
+
+    # first row is header 
     header = None 
     if opts.h:
-        header = next(csv)
+        if rows:
+            header = copy.deepcopy(rows[0])
+            del rows[0]
 
     # ident count
     X = 1
-    col_gen = False
+    str_replace = opts.h
     if opts.h:
-        cur_header = iter(header)
+        if header:
+            cur_header = iter(header)
     else:
         X = 1
-        col_gen = True
 
-    start = opts.start
-    for row in csv:
+    # row index init
+    start = 1
+    if opts.start != None:
+        start = opts.start
+
+    # first row columns count
+    clmn_cnt = None
+    if opts.error_recovery:
+        if rows:
+            clmn_cnt = len(rows[0])
+            idx = 0
+            for row in rows:
+                if len(row) > clmn_cnt:
+                    if opts.all_columns:
+                        pass
+                    else:
+                        rows[idx] = row[:clmn_cnt]
+                elif len(row) < clmn_cnt:
+                    for idx in range(clmn_cnt-len(row)):
+                        if opts.missing_field:
+                            row.append(opts.missing_field)
+                        else:
+                            row.append("")
+
+                idx += 1;
+    row0_len = None
+    if rows:
+        row0_len = len(rows[0])
+
+    for row in rows:
+        if not opts.error_recovery and row0_len != len(row):
+            print_err("Nespravy pocet sloupcu na radku podle prvniho radku!")
+            sys.exit(32)
+
         if opts.i:
-            xmlfile.write(tabs+"<"+opts.l+" index="+'"'+str(start)+'"'+">\n")
+            xmlstr += tabs+"<"+opts.l+" index="+'"'+str(start)+'"'+">\n"
         else:
-            xmlfile.write(tabs+"<"+opts.l+">\n")
+            xmlstr += tabs+"<"+opts.l+">\n"
+
         tabs += "\t"
-        if col_gen:
-            X = 1
+        idx = 0
+        X = 1
         for cell in row:
-            cur = None
-            if opts.h:
-                cur = next(cur_header)
-                xmlfile.write(tabs+"<"+cur+">\n")
-                tabs += "\t"
-            elif col_gen:
-                xmlfile.write(tabs+"<"+opts.c+str(X)+">\n")
+            if opts.h and idx < len(header):
+                    xmlstr += tabs+"<"+header[idx]+">\n"
+                    tabs += "\t"
+            elif opts.all_columns or not opts.h:
+                xmlstr += tabs+"<"+opts.c+str(X)+">\n"
                 tabs += "\t"
             # print column value
-            xmlfile.write(tabs+cell+"\n")
-            if opts.h:
+            if cell:
+                if (opts.h and idx < len(header)) or opts.all_columns or not opts.h:
+                    xmlstr += tabs+cell+"\n"
+
+            if opts.h and idx < len(header):
                 tabs = tabs[:-1]
-                xmlfile.write(tabs+"</"+cur+">\n")
-            elif col_gen:
+                if idx < len(header):
+                    xmlstr += tabs+"</"+header[idx]+">\n"
+            elif opts.all_columns or not opts.h:
                 tabs = tabs[:-1]
-                xmlfile.write(tabs+"</"+opts.c+str(X)+">\n")
-                X += 1
-            if opts.h:
-                cur_header = iter(header)
+                xmlstr += tabs+"</"+opts.c+str(X)+">\n"
+            X += 1
+            idx += 1
         tabs = tabs[:-1]
-        xmlfile.write(tabs+"</"+opts.l+">\n")
+        xmlstr += tabs+"</"+opts.l+">\n"
         start += 1
 
     # root element end tag
     if opts.r:
-        xmlfile.write("</"+opts.r+">\n")
-#
-#    xml_string = ET.tostring(root, encoding="utf-8")
-#    reparsed = minidom.parseString(xml_string)
-#    xmlfile.write(reparsed.toprettyxml(indent="\t"))
+        xmlstr += "</"+opts.r+">\n"
 
-
+    return xmlstr
 
 if __name__ == '__main__':
+    # get command line arguments
     opts = parse_args()
     # opts.s -- cell separator for csv
     csv = parse_csv(opts.input, opts.s)
-    generate_xml(opts)
+    xml = generate_xml(opts, csv)
+    # try open output file
+    xmlfile = open_output(opts.output)
+    # write xml to output file
+    xmlfile.write(xml)
     sys.exit(0)
