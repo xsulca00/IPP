@@ -213,6 +213,18 @@ def generate_xml(opts, csv):
     # copy of rows (need mutable object) 
     rows = copy_rows(csv)
 
+    # replace problematic symbols
+    for row in rows:
+        i = 0
+        for cell in row:
+            row[i] = cell.replace("&", "&amp;")
+            row[i] = row[i].replace("<", "&lt;")
+            row[i] = row[i].replace(">", "&gt;")
+            row[i] = row[i].replace("'", "&apos;")
+            row[i] = row[i].replace('"', "&quot;")
+            i += 1
+
+
     # generate XML header if '-n' is not set
     if not opts.n:
         xmlstr += ('<?xml version="1.0" encoding="UTF-8"?>\n')
