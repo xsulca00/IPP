@@ -5,15 +5,31 @@ import _csv as csv
 import sys
 import copy
 import argparse
-import xml.etree.ElementTree as ET
-from xml.dom import minidom
+import re
 
 # help message
 help_msg= "Skript pro konverzi formátu CSV (viz RFC 4180) do XML. Každému řádku CSV odpovídá jeden dodeﬁnovaný párový element (viz parametr -l) a ten bude obsahovat elementy pro jednotlivé sloupce (viz parametr -h). Tyto elementy pak již budou obsahovat textovou hodnotu dané buňky z CSV zdroje." 
 
-
 def print_err(*args):
     sys.stderr.write(' '.join(map(str,args)) + '\n')
+
+def is_element_name(tag):
+    # regular expression according to xml standard
+    name_start_char = \
+    ":|[A-Z]|_|[a-z]|[\xC0-\xD6]|[\xD8-\xF6]|" \
+    "[\xF8-\u02FF]|[\u0370-\u037D]|[\u037F-\u1FFF]|" \
+    "[\u200C-\u200D]|[\u2070-\u218F]|[\u2C00-\u2FEF]|" \
+    "[\u3001-\uD7FF]|[\uF900-\uFDCF]|[\uFDF0-\uFFFD]|[\U00010000-\U000EFFFF]"
+
+    name_char = name_start_char + "|\-|\.|[0-9]|[\xB7]|[\u0300-\u036F]|[\u203F-\u2040]"
+    name = "("+name_start_char+")"+"("+name_char+")*"
+
+    bytes = name.encode()
+    pattern = bytes.decode("utf-8")
+
+    if re.fullmatch(pattern, tag):
+        return True
+    return False
 
 def copy_rows(csv):
     rows = []
@@ -24,7 +40,6 @@ def copy_rows(csv):
         rows.append(cells)
 
     return rows
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description=help_msg, allow_abbrev=False, add_help=False)
@@ -104,12 +119,28 @@ def parse_args():
         print_err("Chyba behem parsovani!")
         sys.exit(1)
 
+    print(args)
     if args.help:
         if len(sys.argv) > 2:
             print_err("Zadano vice argumentu spolu s --help!")
             sys.exit(1)
         parser.print_help()
         sys.exit(0)
+
+    if args.r:
+        if not is_element_name(args.r):
+            print_err("root-element neobsahuje validni jmeno elementu!")
+            sys.exit(30)
+
+    if args.c:
+        if not is_element_name(args.c):
+            print_err("column-element neobsahuje validni jmeno elementu!")
+            sys.exit(30)
+
+    if args.l:
+        if not is_element_name(args.l):
+            print_err("line-element neobsahuje validni jmeno elementu!")
+            sys.exit(30)
 
     if args.i and args.l == None:
         print_err("Vadna kombinace parametru! (-i nebylo zadano s -l)")
@@ -143,7 +174,6 @@ def parse_args():
     if args.l == None:
         args.l = "row"
 
-    print(args)
     return args;
 
 def parse_csv(filename, dlmtr):
@@ -199,6 +229,7 @@ def generate_xml(opts, csv):
         if rows:
             header = copy.deepcopy(rows[0])
             del rows[0]
+            print("List: ", rows)
 
     # ident count
     X = 1
@@ -218,16 +249,20 @@ def generate_xml(opts, csv):
     clmn_cnt = None
     if opts.error_recovery:
         if rows:
-            clmn_cnt = len(rows[0])
+            if opts.h:
+                clmn_cnt = len(header)
+            else:
+                clmn_cnt = len(rows[0])
             idx = 0
             for row in rows:
                 if len(row) > clmn_cnt:
                     if opts.all_columns:
                         pass
                     else:
+                        # all columns nenastaveno, zkracuj
                         rows[idx] = row[:clmn_cnt]
                 elif len(row) < clmn_cnt:
-                    for idx in range(clmn_cnt-len(row)):
+                    for id in range(clmn_cnt-len(row),len(row)):
                         if opts.missing_field:
                             row.append(opts.missing_field)
                         else:
@@ -240,7 +275,7 @@ def generate_xml(opts, csv):
 
     for row in rows:
         if not opts.error_recovery and row0_len != len(row):
-            print_err("Nespravy pocet sloupcu na radku podle prvniho radku!")
+            print_err("Radky nemaji pocet sloupcu opdpovidajici prvnimu radku!")
             sys.exit(32)
 
         if opts.i:
@@ -285,11 +320,14 @@ def generate_xml(opts, csv):
 if __name__ == '__main__':
     # get command line arguments
     opts = parse_args()
+
     # opts.s -- cell separator for csv
     csv = parse_csv(opts.input, opts.s)
     xml = generate_xml(opts, csv)
+
     # try open output file
     xmlfile = open_output(opts.output)
+
     # write xml to output file
     xmlfile.write(xml)
     sys.exit(0)
