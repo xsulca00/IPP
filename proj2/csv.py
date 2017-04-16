@@ -13,6 +13,32 @@ help_msg= "Skript pro konverzi formátu CSV (viz RFC 4180) do XML. Každému ř�
 def print_err(*args):
     sys.stderr.write(' '.join(map(str,args)) + '\n')
 
+def open_input(filename):
+    # try open input file
+    csvfile = None
+    if filename == "stdin":
+        csvfile = sys.stdin
+    else:
+        try:
+            csvfile = open(filename, newline='', encoding='utf-8')
+        except:
+            print_err("Cannot open input file'",filename,"'!")
+            sys.exit(2)
+
+    return csvfile
+
+def open_output(filename):
+    xmlfile = None
+    if filename == "stdout":
+        xmlfile = sys.stdout
+    else:
+        try:
+            xmlfile = open(filename, mode='w', newline='', encoding='utf-8')
+        except:
+            print_err("Cannot open output file'",filename,"'!")
+            sys.exit(3)
+    return xmlfile
+
 # replace - if opts.h is set
 def is_element_name(tag, replace, opts):
     # regular expression according to xml standard
@@ -59,6 +85,8 @@ def copy_rows(csv):
         rows.append(cells)
 
     return rows
+
+TAB="    "
 
 def parse_args():
     parser = argparse.ArgumentParser(description=help_msg, allow_abbrev=False, add_help=False)
@@ -145,6 +173,14 @@ def parse_args():
         parser.print_help()
         sys.exit(0)
 
+    if args.input == None:
+        args.input = "stdin" 
+    if args.output == None:
+        args.output = "stdout" 
+
+    args.input = open_input(args.input)
+    args.output = open_output(args.output)
+
     if args.r:
         if not is_element_name(args.r, False, args):
             print_err("root-element neobsahuje validni jmeno elementu!")
@@ -181,12 +217,10 @@ def parse_args():
         sys.exit(1)
 
 
-    if args.input == None:
-        args.input = "stdin" 
-    if args.output == None:
-        args.output = "stdout" 
     if args.s == None:
         args.s = ","
+    if args.s == "TAB":
+        args.s = "\t" 
     if args.all_columns == None:
         args.all_columns = "col"
     if args.l == None:
@@ -194,36 +228,16 @@ def parse_args():
 
     return args;
 
-def parse_csv(filename, dlmtr):
-    # try open input file
-    csvfile = None
-    if filename == "stdin":
-        csvfile = sys.stdin
-    else:
-        try:
-            csvfile = open(filename, newline='', encoding='utf-8')
-        except:
-            print_err("Cannot open input file'",filename,"'!")
-            sys.exit(2)
 
+def parse_csv(csvfile, dlmtr):
     spamreader = None
     try:
         spamreader = csv.reader(csvfile, delimiter=dlmtr, quotechar='"')
         return spamreader
     except csv.Error as e:
-        sys.exit('file {}, line {}: {}'.format(filename, reader.line_num, e))
+        print_err('file {}, line {}: {}'.format(filename, reader.line_num, e))
+        sys.exit(4)
 
-def open_output(name):
-    xmlfile = None
-    if name == "stdout":
-        xmlfile = sys.stdout
-    else:
-        try:
-            xmlfile = open(name, mode='w', newline='', encoding='utf-8')
-        except:
-            print_err("Cannot open output file'",name,"'!")
-            sys.exit(3)
-    return xmlfile
 
 def generate_xml(opts, csv):
     # result xml string
@@ -251,7 +265,7 @@ def generate_xml(opts, csv):
     tabs = ""
     if opts.r:
         xmlstr += "<"+opts.r+">\n"
-        tabs = "\t"
+        tabs =TAB
 
     # first row is header 
     header = None 
@@ -321,16 +335,16 @@ def generate_xml(opts, csv):
         else:
             xmlstr += tabs+"<"+opts.l+">\n"
 
-        tabs += "\t"
+        tabs +=TAB
         idx = 0
         X = 1
         for cell in row:
             if opts.h and idx < len(header):
                 xmlstr += tabs+"<"+header[idx]+">\n"
-                tabs += "\t"
+                tabs +=TAB
             elif opts.all_columns or not opts.h:
                 xmlstr += tabs+"<"+opts.c+str(X)+">\n"
-                tabs += "\t"
+                tabs +=TAB
 
             # print column value
             if cell:
@@ -338,15 +352,15 @@ def generate_xml(opts, csv):
                     xmlstr += tabs+cell+"\n"
 
             if opts.h and idx < len(header):
-                tabs = tabs[:-1]
+                tabs = tabs[:-4]
                 if idx < len(header):
                     xmlstr += tabs+"</"+header[idx]+">\n"
             elif opts.all_columns or not opts.h:
-                tabs = tabs[:-1]
+                tabs = tabs[:-4]
                 xmlstr += tabs+"</"+opts.c+str(X)+">\n"
             X += 1
             idx += 1
-        tabs = tabs[:-1]
+        tabs = tabs[:-4]
         xmlstr += tabs+"</"+opts.l+">\n"
         start += 1
 
@@ -364,9 +378,6 @@ if __name__ == '__main__':
     csv = parse_csv(opts.input, opts.s)
     xml = generate_xml(opts, csv)
 
-    # try open output file
-    xmlfile = open_output(opts.output)
-
     # write xml to output file
-    xmlfile.write(xml)
+    opts.output.write(xml)
     sys.exit(0)
