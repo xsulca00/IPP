@@ -13,7 +13,8 @@ help_msg= "Skript pro konverzi formátu CSV (viz RFC 4180) do XML. Každému ř�
 def print_err(*args):
     sys.stderr.write(' '.join(map(str,args)) + '\n')
 
-def is_element_name(tag):
+# replace - if opts.h is set
+def is_element_name(tag, replace, opts):
     # regular expression according to xml standard
     name_start_char = \
     ":|[A-Z]|_|[a-z]|[\xC0-\xD6]|[\xD8-\xF6]|" \
@@ -27,8 +28,26 @@ def is_element_name(tag):
     bytes = name.encode()
     pattern = bytes.decode("utf-8")
 
+    if replace:
+        string = ""
+        # loop over symbols in string and replace
+        if tag:
+            bts = name_start_char.encode()
+            pat = bts.decode("utf-8")
+            if not re.fullmatch(pat, tag[0]):
+                string += opts.h
+        bts = name_char.encode()
+        pat = bts.decode("utf-8")
+        for c in tag:
+            if not re.fullmatch(pat, c):
+                 string += opts.h
+            else:
+                 string += c
+        if re.fullmatch(pattern, string):
+            return string
+        return ""
     if re.fullmatch(pattern, tag):
-        return True
+        return True 
     return False
 
 def copy_rows(csv):
@@ -119,7 +138,6 @@ def parse_args():
         print_err("Chyba behem parsovani!")
         sys.exit(1)
 
-    print(args)
     if args.help:
         if len(sys.argv) > 2:
             print_err("Zadano vice argumentu spolu s --help!")
@@ -128,17 +146,17 @@ def parse_args():
         sys.exit(0)
 
     if args.r:
-        if not is_element_name(args.r):
+        if not is_element_name(args.r, False, args):
             print_err("root-element neobsahuje validni jmeno elementu!")
             sys.exit(30)
 
     if args.c:
-        if not is_element_name(args.c):
+        if not is_element_name(args.c, False, args):
             print_err("column-element neobsahuje validni jmeno elementu!")
             sys.exit(30)
 
     if args.l:
-        if not is_element_name(args.l):
+        if not is_element_name(args.l, False, args):
             print_err("line-element neobsahuje validni jmeno elementu!")
             sys.exit(30)
 
@@ -240,8 +258,16 @@ def generate_xml(opts, csv):
     if opts.h:
         if rows:
             header = copy.deepcopy(rows[0])
+            id = 0
+            for cell in header:
+                replace = is_element_name(cell, True, opts)
+                if replace: 
+                    header[id] = replace
+                else:
+                    print_err("-h nastaveno, ale nazev elementu zustal nevalidni!")
+                    sys.exit(31)
+                id += 1
             del rows[0]
-            print("List: ", rows)
 
     # ident count
     X = 1
@@ -287,7 +313,7 @@ def generate_xml(opts, csv):
 
     for row in rows:
         if not opts.error_recovery and row0_len != len(row):
-            print_err("Radky nemaji pocet sloupcu opdpovidajici prvnimu radku!")
+            print_err("Pocet sloupcu na radku neodpovida poctu sloupcu na prvnim radku!")
             sys.exit(32)
 
         if opts.i:
@@ -300,11 +326,12 @@ def generate_xml(opts, csv):
         X = 1
         for cell in row:
             if opts.h and idx < len(header):
-                    xmlstr += tabs+"<"+header[idx]+">\n"
-                    tabs += "\t"
+                xmlstr += tabs+"<"+header[idx]+">\n"
+                tabs += "\t"
             elif opts.all_columns or not opts.h:
                 xmlstr += tabs+"<"+opts.c+str(X)+">\n"
                 tabs += "\t"
+
             # print column value
             if cell:
                 if (opts.h and idx < len(header)) or opts.all_columns or not opts.h:
