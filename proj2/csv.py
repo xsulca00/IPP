@@ -219,7 +219,7 @@ def open_output(name):
         xmlfile = sys.stdout
     else:
         try:
-            xmlfile = open(name, newline='', encoding='utf-8')
+            xmlfile = open(name, mode='w', newline='', encoding='utf-8')
         except:
             print_err("Cannot open output file'",name,"'!")
             sys.exit(3)
