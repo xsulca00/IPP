@@ -188,8 +188,6 @@ def parse_args():
         parser.print_help()
         sys.exit(0)
 
-    print(args)
-
     if args.input == None:
         args.input = sys.stdin
     else:
@@ -292,7 +290,7 @@ def create_xml(csv, opts):
     if not opts.n:
         xmlstr += generate_header()
 
-    # XML indentation
+    # XML indentation (default 4 spaces)
     tab = Indent("    ")
     
     # write root element if '-r' is set
@@ -340,9 +338,9 @@ def create_xml(csv, opts):
             elif row_len < clmn_cnt:
                 for j in range(clmn_cnt-row_len,row_len):
                     if opts.missing_field:
-                        row.append(opts.missing_field)
+                        rows[i].append(opts.missing_field)
                     else:
-                        row.append("")
+                        rows[i].append("")
 
     row0_len = 0
     if rows:
