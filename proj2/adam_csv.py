@@ -14,7 +14,7 @@ def cerr(errmsg, result):
     sys.exit(result)
 
 # open input CSV file
-def open_input(filename):
+def open_csv_in(filename):
     csvfile = None
     try:
         csvfile = open(filename, newline='', encoding='utf-8')
@@ -24,7 +24,7 @@ def open_input(filename):
     return csvfile
 
 # open output CSV file
-def open_output(filename):
+def open_xml_out(filename):
     xmlfile = None
     try:
         xmlfile = open(filename, mode='w', newline='', encoding='utf-8')
@@ -107,18 +107,14 @@ def init_options():
                         help="Skript pro konverzi CSV formatu do formatu XML",
                         action="store_true")
 
-    argparser.add_argument("--input",
-                        metavar="filename", 
-                        help="zadaný vstupní CSV soubor v UTF-8")
-
     argparser.add_argument("--output",
                         metavar="filename", 
                         help="textový výstupní XML soubor"
                         "s obsahem převedeným ze vstupního souboru.")
 
-    argparser.add_argument("-n", 
-                        help="negenerovat XML hlavičku na výstup skriptu",
-                        action="store_true")
+    argparser.add_argument("--input",
+                        metavar="filename", 
+                        help="zadaný vstupní CSV soubor v UTF-8")
 
     argparser.add_argument("-r",
                         metavar="root-element", 
@@ -129,12 +125,9 @@ def init_options():
                         help="nastavení separátoru (jeden znak) "
                         "buněk (resp. sloupců) na každém řádku vstupního CSV")
 
-    argparser.add_argument("-h", 
-                        nargs="?",
-                        const="-",
-                        metavar="subst", 
-                        help="první řádek (přesněji první záznam) "
-                        "CSV souboru slouží jako hlavička")
+    argparser.add_argument("-n", 
+                        help="negenerovat XML hlavičku na výstup skriptu",
+                        action="store_true")
 
     argparser.add_argument("-c", 
                         default="col",
@@ -142,24 +135,27 @@ def init_options():
                         help="určuje preﬁx jména elementu column-elementX, "
                         "který bude obalovat nepojmenované buňky (resp. sloupce)")
 
-    argparser.add_argument("-l", 
-                        metavar="line-element", 
-                        help="jméno elementu, který obaluje zvlášť "
-                        "každý řádek vstupního CSV")
+    argparser.add_argument("-h", 
+                        nargs="?",
+                        const="-",
+                        metavar="subst", 
+                        help="první řádek (přesněji první záznam) "
+                        "CSV souboru slouží jako hlavička")
 
     argparser.add_argument("-i", 
                         help="zajistí vložení atributu index "
                         "s číselnou hodnotou do elementu line-element", action="store_true")
+
+    argparser.add_argument("-l", 
+                        metavar="line-element", 
+                        help="jméno elementu, který obaluje zvlášť "
+                        "každý řádek vstupního CSV")
 
     argparser.add_argument("--start", 
                         metavar="n", 
                         type=int,
                         help=" inicializace inkrementálního čitače "
                         "pro parametr -i na zadané kladné celé číslo n včetně nuly ")
-
-    argparser.add_argument("-e", "--error-recovery", 
-                        help="zotavení z chybného počtu sloupců "
-                        "na neprvním řádku", action="store_true")
 
     argparser.add_argument("--missing-field", 
                         metavar="val", 
@@ -170,6 +166,11 @@ def init_options():
                         help="Sloupce, které jsou v nekorektním CSV navíc, "
                         "nejsou ignorovány, ale jsou také vloženy do výsledného XML", 
                         action="store_true")
+
+    argparser.add_argument("-e", "--error-recovery", 
+                        help="zotavení z chybného počtu sloupců "
+                        "na neprvním řádku", action="store_true")
+
     return argparser
 
 def parse_args():
@@ -191,12 +192,12 @@ def parse_args():
     if args.input == None:
         args.input = sys.stdin
     else:
-        args.input = open_input(args.input)
+        args.input = open_csv_in(args.input)
 
     if args.output == None:
         args.output = sys.stdout
     else:
-        args.output = open_output(args.output)
+        args.output = open_xml_out(args.output)
 
     if args.r:
         if not is_element_name(args.r):
@@ -225,13 +226,13 @@ def parse_args():
     if args.all_columns and not args.error_recovery:
         cerr("Nespravna kombinace parametru! (--all-columns musi byt zadan s -e nebo --error_recovery)", 1)
 
-    if args.s == None:
+    if not args.s:
         args.s = ","
     if args.s == "TAB":
         args.s = "\t" 
-    if args.l == None:
+    if not args.l:
         args.l = "row"
-    if args.all_columns == None:
+    if not args.all_columns:
         args.all_columns = "col"
 
     return args;
